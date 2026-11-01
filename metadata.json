@@ -1,0 +1,6 @@
+{
+  "name": "Hybrid Network Intrusion Detection System (NIDS)",
+  "description": "CSE Capstone prototype combining Supervised Random Forest for known attacks and Unsupervised Isolation Forest for unknown zero-day anomalies with Decision Fusion.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
