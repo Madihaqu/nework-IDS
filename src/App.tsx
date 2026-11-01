@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { NetworkFlow, ModelHyperparams } from './types/nids';
-import { generateSyntheticFlows, parseCSVToFlows } from './lib/syntheticData';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { NetworkFlow, ModelHyperparams, TimelinePoint } from './types/nids';
+import { generateSyntheticFlows, parseCSVToFlows, exportFlowsToCSV } from './lib/syntheticData';
 import { runHybridPipeline } from './lib/mlEngine';
 import { Sidebar } from './components/Sidebar';
 import { MetricsCards } from './components/MetricsCards';
@@ -28,6 +28,7 @@ export default function App() {
     rfTrees: 100,
     datasetSize: 3000,
     randomSeed: 42,
+    streamRate: 10, // 10 flows/sec default
   });
 
   const [dataSourceName, setDataSourceName] = useState<string>(
@@ -43,6 +44,24 @@ export default function App() {
   );
 
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
+
+  // Rolling real-time traffic timeline for chart (last 16 points)
+  const [timeline, setTimeline] = useState<TimelinePoint[]>(() => {
+    const pts: TimelinePoint[] = [];
+    const now = Date.now();
+    for (let i = 15; i >= 0; i--) {
+      pts.push({
+        timeLabel: `${i}s ago`,
+        timestamp: now - i * 1000,
+        normalCount: Math.round(18 + Math.random() * 8),
+        knownCount: Math.random() > 0.65 ? Math.round(2 + Math.random() * 5) : 0,
+        anomalyCount: Math.random() > 0.75 ? Math.round(1 + Math.random() * 3) : 0,
+        totalPackets: Math.round(120 + Math.random() * 80),
+        flowRate: Math.round(12 + Math.random() * 6),
+      });
+    }
+    return pts;
+  });
 
   // Compute Hybrid ML evaluations
   const { evaluatedFlows, metrics } = useMemo(() => {
@@ -79,30 +98,84 @@ export default function App() {
     reader.readAsText(file);
   }, []);
 
-  // Live packet streaming simulation
+  // Download Sample CSV for testing client-side file upload
+  const handleDownloadSampleCSV = useCallback(() => {
+    const sampleFlows = generateSyntheticFlows(1000, 99);
+    const csvContent = exportFlowsToCSV(sampleFlows);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'cicids2017_sample_1000.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, []);
+
+  // Live packet streaming simulation (10-20 flows/sec)
   useEffect(() => {
     if (!isStreaming) return;
 
+    const rate = hyperparams.streamRate || 10;
+    // Interval runs every 500ms; batches of (rate / 2) flows per tick
+    const batchSize = Math.max(1, Math.round(rate / 2));
+
     const interval = setInterval(() => {
-      // Generate 1 new flow with varying probabilities
-      const dice = Math.random();
-      let flowType: 'BENIGN' | 'DDoS' | 'PortScan' | 'Unseen_Attack' = 'BENIGN';
-      if (dice > 0.88) flowType = 'DDoS';
-      else if (dice > 0.76) flowType = 'PortScan';
-      else if (dice > 0.70) flowType = 'Unseen_Attack';
+      const newBatch: NetworkFlow[] = [];
+      let batchNormals = 0;
+      let batchKnown = 0;
+      let batchAnomaly = 0;
 
-      const singleFlow = generateSyntheticFlows(20, Math.floor(Math.random() * 10000)).find(
-        (f) => f.true_label === flowType
-      );
+      for (let k = 0; k < batchSize; k++) {
+        const dice = Math.random();
+        let flowType: 'BENIGN' | 'DDoS' | 'PortScan' | 'Unseen_Attack' = 'BENIGN';
+        if (dice > 0.85) {
+          flowType = 'DDoS';
+          batchKnown++;
+        } else if (dice > 0.73) {
+          flowType = 'PortScan';
+          batchKnown++;
+        } else if (dice > 0.65) {
+          flowType = 'Unseen_Attack';
+          batchAnomaly++;
+        } else {
+          batchNormals++;
+        }
 
-      if (singleFlow) {
-        singleFlow.id = `LIVE-${Date.now().toString().slice(-4)}`;
-        setRawDataset((prev) => [singleFlow, ...prev.slice(0, 3999)]);
+        const generated = generateSyntheticFlows(12, Math.floor(Math.random() * 100000)).find(
+          (f) => f.true_label === flowType
+        );
+
+        if (generated) {
+          generated.id = `LIVE-${Date.now().toString().slice(-4)}-${k}`;
+          newBatch.push(generated);
+        }
       }
-    }, 750);
+
+      if (newBatch.length > 0) {
+        setRawDataset((prev) => [...newBatch, ...prev.slice(0, 4999 - newBatch.length)]);
+      }
+
+      // Update rolling timeline
+      setTimeline((prev) => {
+        const next = [...prev.slice(1)];
+        const lastRate = batchSize * 2;
+        next.push({
+          timeLabel: 'Just now',
+          timestamp: Date.now(),
+          normalCount: batchNormals,
+          knownCount: batchKnown,
+          anomalyCount: batchAnomaly,
+          totalPackets: batchNormals * 15 + batchKnown * 350 + batchAnomaly * 60,
+          flowRate: lastRate,
+        });
+        return next;
+      });
+    }, 500);
 
     return () => clearInterval(interval);
-  }, [isStreaming]);
+  }, [isStreaming, hyperparams.streamRate]);
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
@@ -112,10 +185,11 @@ export default function App() {
         onChangeHyperparams={handleUpdateHyperparams}
         onRegenerateData={handleRegenerateData}
         onFileUpload={handleFileUpload}
+        onDownloadSampleCSV={handleDownloadSampleCSV}
         dataSourceName={dataSourceName}
         isStreaming={isStreaming}
         onToggleStreaming={() => setIsStreaming(!isStreaming)}
-        streamRate={1.3}
+        streamRate={hyperparams.streamRate || 10}
       />
 
       {/* Main Content Area */}
@@ -212,12 +286,17 @@ export default function App() {
 
         {/* Scrollable Dashboard Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Top 4 Metrics Cards */}
-          <MetricsCards metrics={metrics} />
+          {/* Top 5 KPI Metrics Cards */}
+          <MetricsCards metrics={metrics} isStreaming={isStreaming} />
 
           {/* Active Tab View */}
           {activeTab === 'analytics' && (
-            <DetectionAnalytics evaluatedFlows={evaluatedFlows} metrics={metrics} />
+            <DetectionAnalytics
+              evaluatedFlows={evaluatedFlows}
+              metrics={metrics}
+              timeline={timeline}
+              isStreaming={isStreaming}
+            />
           )}
 
           {activeTab === 'table' && (

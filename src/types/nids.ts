@@ -41,6 +41,13 @@ export interface ModelMetrics {
   zeroDayCaptureRate: number;
   benignFalseAlarmRate: number;
   overallAccuracy: number;
+  systemHealth: {
+    status: 'OPTIMAL' | 'DEGRADED' | 'EVALUATING';
+    latencyMs: number;
+    sensorThroughput: number; // flows/sec
+    droppedPackets: number;
+    uptimePercent: number;
+  };
   confusionMatrix: {
     labels: string[];
     matrix: number[][]; // [groundTruth][predicted]
@@ -54,4 +61,15 @@ export interface ModelHyperparams {
   rfTrees: number;
   datasetSize: number;
   randomSeed: number;
+  streamRate: number; // 5, 10, or 20 flows/sec
+}
+
+export interface TimelinePoint {
+  timeLabel: string;
+  timestamp: number;
+  normalCount: number;
+  knownCount: number;
+  anomalyCount: number;
+  totalPackets: number;
+  flowRate: number;
 }

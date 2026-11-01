@@ -67,6 +67,14 @@ export const LiveInspector: React.FC<LiveInspectorProps> = ({ hyperparams }) => 
       setBwdLenMean(720);
       setSynFlag(0);
       setAckFlag(1);
+    } else if (name === 'Slowloris Keep-Alive Probe') {
+      setDuration(22000);
+      setFwdPkts(28);
+      setBwdPkts(2);
+      setFwdLenMean(46);
+      setBwdLenMean(0);
+      setSynFlag(0);
+      setAckFlag(1);
     }
     setResult(null);
   };
@@ -172,6 +180,7 @@ export const LiveInspector: React.FC<LiveInspectorProps> = ({ hyperparams }) => 
               'DDoS SYN Flood',
               'Stealthy PortScan',
               'Zero-Day Exfiltration / Tunnel',
+              'Slowloris Keep-Alive Probe',
               'Normal HTTPS Session',
             ].map((p) => (
               <button

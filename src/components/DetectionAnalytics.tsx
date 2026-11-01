@@ -1,17 +1,26 @@
 import React, { useState } from 'react';
-import { EvaluatedFlow, ModelMetrics } from '../types/nids';
-import { PieChart, BarChart2, TrendingUp, Grid, Info } from 'lucide-react';
+import { EvaluatedFlow, ModelMetrics, TimelinePoint } from '../types/nids';
+import { PieChart, BarChart2, TrendingUp, Grid, Info, Activity, Radio, AlertOctagon } from 'lucide-react';
 
 interface DetectionAnalyticsProps {
   evaluatedFlows: EvaluatedFlow[];
   metrics: ModelMetrics;
+  timeline?: TimelinePoint[];
+  isStreaming?: boolean;
 }
 
 export const DetectionAnalytics: React.FC<DetectionAnalyticsProps> = ({
   evaluatedFlows,
   metrics,
+  timeline = [],
+  isStreaming = false,
 }) => {
   const [hoveredPoint, setHoveredPoint] = useState<EvaluatedFlow | null>(null);
+
+  // Timeline SVG calculations
+  const maxTimelineRate = Math.max(...timeline.map((t) => t.flowRate), 40);
+  const timelineSvgWidth = 600;
+  const timelineSvgHeight = 110;
 
   // 1. Donut breakdown data
   const total = metrics.totalFlows || 1;
@@ -83,6 +92,117 @@ export const DetectionAnalytics: React.FC<DetectionAnalyticsProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Live Wire Traffic Timeline & Threat Velocity Monitor */}
+      <div className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="font-semibold text-sm text-slate-100 flex items-center gap-2">
+              <Activity className="w-4 h-4 text-cyan-400" />
+              Live Wire Traffic Timeline &amp; Threat Velocity
+              {isStreaming ? (
+                <span className="flex h-2 w-2 relative ml-1">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                </span>
+              ) : (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">
+                  READY
+                </span>
+              )}
+            </h3>
+            <p className="text-xs text-slate-400">
+              Rolling real-time flow throughput and attack intercept timeline across sensors
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 text-[11px]">
+            <span className="flex items-center gap-1.5 text-slate-300 font-mono">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" /> Normal
+            </span>
+            <span className="flex items-center gap-1.5 text-slate-300 font-mono">
+              <span className="w-2 h-2 rounded-full bg-rose-500" /> Known Attack
+            </span>
+            <span className="flex items-center gap-1.5 text-slate-300 font-mono">
+              <span className="w-2 h-2 rounded-full bg-amber-500" /> Zero-Day
+            </span>
+          </div>
+        </div>
+
+        {/* SVG Timeline Graph */}
+        <div className="relative h-28 w-full bg-slate-950/80 rounded border border-slate-800/80 overflow-hidden pt-2 px-2">
+          {timeline.length > 1 ? (
+            <svg viewBox={`0 0 ${timelineSvgWidth} ${timelineSvgHeight}`} className="w-full h-full preserve-3d" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="velocityGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.4" />
+                  <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.0" />
+                </linearGradient>
+              </defs>
+
+              {/* Grid lines */}
+              <line x1="0" y1={timelineSvgHeight * 0.25} x2={timelineSvgWidth} y2={timelineSvgHeight * 0.25} stroke="#1e293b" strokeDasharray="3 3" />
+              <line x1="0" y1={timelineSvgHeight * 0.5} x2={timelineSvgWidth} y2={timelineSvgHeight * 0.5} stroke="#1e293b" strokeDasharray="3 3" />
+              <line x1="0" y1={timelineSvgHeight * 0.75} x2={timelineSvgWidth} y2={timelineSvgHeight * 0.75} stroke="#1e293b" strokeDasharray="3 3" />
+
+              {/* Area path */}
+              <polygon
+                fill="url(#velocityGrad)"
+                points={`
+                  0,${timelineSvgHeight}
+                  ${timeline.map((pt, i) => {
+                    const x = (i / (timeline.length - 1)) * timelineSvgWidth;
+                    const y = timelineSvgHeight - (pt.flowRate / maxTimelineRate) * (timelineSvgHeight - 15) - 5;
+                    return `${x},${y}`;
+                  }).join(' ')}
+                  ${timelineSvgWidth},${timelineSvgHeight}
+                `}
+              />
+
+              {/* Line path */}
+              <polyline
+                fill="none"
+                stroke="#06b6d4"
+                strokeWidth="2"
+                points={timeline.map((pt, i) => {
+                  const x = (i / (timeline.length - 1)) * timelineSvgWidth;
+                  const y = timelineSvgHeight - (pt.flowRate / maxTimelineRate) * (timelineSvgHeight - 15) - 5;
+                  return `${x},${y}`;
+                }).join(' ')}
+              />
+
+              {/* Intercept Points */}
+              {timeline.map((pt, i) => {
+                const x = (i / (timeline.length - 1)) * timelineSvgWidth;
+                const y = timelineSvgHeight - (pt.flowRate / maxTimelineRate) * (timelineSvgHeight - 15) - 5;
+                const isThreat = pt.knownCount > 0 || pt.anomalyCount > 0;
+                const color = pt.knownCount > 0 ? '#ef4444' : pt.anomalyCount > 0 ? '#f59e0b' : '#10b981';
+
+                return (
+                  <circle
+                    key={pt.timestamp}
+                    cx={x}
+                    cy={y}
+                    r={isThreat ? 4 : 2}
+                    fill={color}
+                    className="transition-all"
+                  />
+                );
+              })}
+            </svg>
+          ) : (
+            <div className="h-full flex items-center justify-center text-xs text-slate-500 font-mono">
+              Collecting real-time wire telemetries... Click &quot;Start Live Ingestion&quot; in sidebar to stream at 10-20 flows/sec.
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+          <span>T-20s (Live History)</span>
+          <span>Peak Throughput: {maxTimelineRate.toFixed(0)} pkts/s</span>
+          <span>T-0s (Current Wire Feed)</span>
+        </div>
+      </div>
+
       {/* Row 1: Decision Breakdown & Feature Importance */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Donut Chart */}

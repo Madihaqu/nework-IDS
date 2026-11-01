@@ -1,12 +1,13 @@
 import React, { useRef } from 'react';
 import { ModelHyperparams } from '../types/nids';
-import { Sliders, Database, ShieldAlert, Cpu, RefreshCw, Upload, Play, Square, Activity } from 'lucide-react';
+import { Sliders, Database, ShieldAlert, Cpu, RefreshCw, Upload, Play, Square, Activity, Download } from 'lucide-react';
 
 interface SidebarProps {
   hyperparams: ModelHyperparams;
   onChangeHyperparams: (params: Partial<ModelHyperparams>) => void;
   onRegenerateData: () => void;
   onFileUpload: (file: File) => void;
+  onDownloadSampleCSV?: () => void;
   dataSourceName: string;
   isStreaming: boolean;
   onToggleStreaming: () => void;
@@ -18,6 +19,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onChangeHyperparams,
   onRegenerateData,
   onFileUpload,
+  onDownloadSampleCSV,
   dataSourceName,
   isStreaming,
   onToggleStreaming,
@@ -55,10 +57,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-4 space-y-6 flex-1 text-xs">
         {/* Live Packet Streaming Mode */}
         <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1.5">
             <span className="font-semibold text-slate-200 flex items-center gap-1.5">
               <Activity className="w-4 h-4 text-cyan-400" />
-              Live PCAP Stream
+              Live PCAP Stream Ingestion
             </span>
             {isStreaming && (
               <span className="flex h-2 w-2 relative">
@@ -67,12 +69,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </span>
             )}
           </div>
-          <p className="text-slate-400 text-[11px] mb-3">
-            Simulate real-time wire traffic arriving at 10-20 flows/sec into the dual ML sensors.
+          <p className="text-slate-400 text-[11px] mb-2.5 leading-snug">
+            Simulates wire packets at 10-20 flows/sec into the dual ML pipeline.
           </p>
+
+          {/* Stream Rate Selector */}
+          <div className="mb-2.5">
+            <div className="flex items-center justify-between text-[11px] text-slate-300 mb-1">
+              <span>Ingestion Speed:</span>
+              <span className="font-mono text-cyan-400 font-bold">{hyperparams.streamRate || 10} flows/s</span>
+            </div>
+            <div className="grid grid-cols-3 gap-1">
+              {[5, 10, 20].map((rate) => (
+                <button
+                  key={rate}
+                  onClick={() => onChangeHyperparams({ streamRate: rate })}
+                  className={`py-1 text-[11px] font-mono rounded border transition-colors ${
+                    (hyperparams.streamRate || 10) === rate
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 font-bold'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  {rate}/sec
+                </button>
+              ))}
+            </div>
+          </div>
+
           <button
             onClick={onToggleStreaming}
-            className={`w-full py-2 px-3 rounded font-medium text-xs flex items-center justify-center gap-2 transition-all ${
+            className={`w-full py-2 px-3 rounded font-medium text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
               isStreaming
                 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
                 : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30'
@@ -84,7 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </>
             ) : (
               <>
-                <Play className="w-3.5 h-3.5 fill-current" /> Start Live Ingestion
+                <Play className="w-3.5 h-3.5 fill-current" /> Start Live Ingestion (10-20 flows/s)
               </>
             )}
           </button>
@@ -94,7 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div>
           <div className="flex items-center gap-1.5 font-semibold text-slate-200 uppercase tracking-wider text-[11px] mb-3">
             <Database className="w-3.5 h-3.5 text-blue-400" />
-            1. Ingestion & Dataset
+            1. Ingestion &amp; Dataset
           </div>
 
           <div className="space-y-3">
@@ -105,7 +131,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             </div>
 
-            <div>
+            <div className="space-y-1.5">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -115,11 +141,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full py-1.5 px-3 rounded bg-slate-800 hover:bg-slate-700/80 text-slate-200 border border-slate-700 flex items-center justify-center gap-2 transition-colors text-xs"
+                className="w-full py-1.5 px-3 rounded bg-slate-800 hover:bg-slate-700/80 text-slate-200 border border-slate-700 flex items-center justify-center gap-2 transition-colors text-xs cursor-pointer"
               >
                 <Upload className="w-3.5 h-3.5 text-slate-400" />
-                Upload Custom CSV
+                Upload Custom CSV (CIC-IDS2017)
               </button>
+
+              {onDownloadSampleCSV && (
+                <button
+                  onClick={onDownloadSampleCSV}
+                  className="w-full py-1.5 px-3 rounded bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 flex items-center justify-center gap-2 transition-colors text-[11px] cursor-pointer"
+                >
+                  <Download className="w-3 h-3 text-blue-400" />
+                  Download Sample CSV (1,000 Flows)
+                </button>
+              )}
             </div>
 
             <div>

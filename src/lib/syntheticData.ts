@@ -203,3 +203,40 @@ export function parseCSVToFlows(csvText: string): NetworkFlow[] {
 
   return flows;
 }
+
+export function exportFlowsToCSV(flows: NetworkFlow[]): string {
+  const headers = [
+    'flow_duration_ms',
+    'total_fwd_packets',
+    'total_bwd_packets',
+    'fwd_pkt_len_mean',
+    'bwd_pkt_len_mean',
+    'flow_bytes_per_sec',
+    'flow_pkts_per_sec',
+    'fwd_iat_mean',
+    'bwd_iat_mean',
+    'syn_flag_count',
+    'ack_flag_count',
+    'avg_packet_size',
+    'true_label'
+  ];
+
+  const rows = flows.map((f) => [
+    f.flow_duration_ms.toFixed(1),
+    f.total_fwd_packets,
+    f.total_bwd_packets,
+    f.fwd_pkt_len_mean.toFixed(1),
+    f.bwd_pkt_len_mean.toFixed(1),
+    f.flow_bytes_per_sec.toFixed(1),
+    f.flow_pkts_per_sec.toFixed(1),
+    f.fwd_iat_mean.toFixed(1),
+    f.bwd_iat_mean.toFixed(1),
+    f.syn_flag_count,
+    f.ack_flag_count,
+    f.avg_packet_size.toFixed(1),
+    f.true_label
+  ]);
+
+  return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+}
+
